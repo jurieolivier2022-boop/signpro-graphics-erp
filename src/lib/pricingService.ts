@@ -40,27 +40,39 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   ncrCoverFee: 12.00,
 };
 
+const round = (num: number) => Math.round(num * 100) / 100;
+
 export const calculateQuoteTotals = (
   items: { totalPrice: number; totalCost: number }[],
   isExpress: boolean,
   settings: PricingSettings
 ) => {
-  const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-  const totalCost = items.reduce((sum, item) => sum + item.totalCost, 0);
-  
+  const subtotal = round(
+    items.reduce((sum, item) => sum + Number(item.totalPrice), 0)
+  );
+
+  const totalCost = round(
+    items.reduce((sum, item) => sum + Number(item.totalCost), 0)
+  );
+
   let expressSurcharge = 0;
+
   if (isExpress) {
     if (settings.expressSurchargeType === 'percentage') {
-      expressSurcharge = subtotal * (settings.expressSurchargeValue / 100);
+      expressSurcharge = round(subtotal * (settings.expressSurchargeValue / 100));
     } else {
-      expressSurcharge = settings.expressSurchargeValue;
+      expressSurcharge = round(settings.expressSurchargeValue);
     }
   }
 
-  const taxableAmount = subtotal + expressSurcharge;
-  const vat = taxableAmount * (settings.vatRate / 100);
-  const total = taxableAmount + vat;
-  const profit = taxableAmount - totalCost;
+  const taxableAmount = round(subtotal + expressSurcharge);
+
+  // ✅ VAT (EXCLUSIVE pricing)
+  const vat = round(taxableAmount * (settings.vatRate / 100));
+
+  const total = round(taxableAmount + vat);
+
+  const profit = round(taxableAmount - totalCost);
 
   return {
     subtotal,
@@ -68,45 +80,5 @@ export const calculateQuoteTotals = (
     vat,
     total,
     profit
-  };
-};
-
-export const calculateNCRPrice = (
-  settings: PricingSettings,
-  size: string,
-  parts: string,
-  print: string,
-  quantity: number,
-  hasNumbering: boolean,
-  hasPerforation: boolean,
-  hasCover: boolean
-) => {
-  const sizeFactor = settings.ncrSizeFactors[size] || 1.0;
-  const partFactor = settings.ncrPartFactors[parts] || 1.0;
-  const printFactor = settings.ncrPrintFactors[print] || 1.0;
-  
-  // Base unit price calculation
-  let unitPrice = settings.ncrBaseRate * sizeFactor * partFactor * printFactor;
-  
-  // Apply volume discounts
-  const discount = settings.ncrVolumeDiscounts
-    .sort((a, b) => b.minQty - a.minQty)
-    .find(d => quantity >= d.minQty)?.discount || 0;
-    
-  unitPrice = unitPrice * (1 - discount);
-  
-  // Add fees
-  let totalFees = 0;
-  if (hasNumbering) totalFees += settings.ncrNumberingFee;
-  if (hasPerforation) totalFees += settings.ncrPerforationFee;
-  if (hasCover) totalFees += settings.ncrCoverFee;
-  
-  const totalPrice = (unitPrice * quantity) + totalFees;
-  const unitCost = totalPrice / quantity;
-  
-  return {
-    unitPrice: unitCost,
-    totalPrice,
-    costPrice: totalPrice * 0.6 // Simplified cost basis
   };
 };
