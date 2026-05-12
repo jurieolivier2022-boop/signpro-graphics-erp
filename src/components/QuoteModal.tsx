@@ -229,9 +229,8 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem }: Qu
         computedCost = q * u * 0.6;
       }
     } else if (item.type === 'Material' && isArea) {
-      computedCost = q * sqMmToSqM(w * l) * u;
-      computedPrice = computedCost * 1.4; // Default 40% markup for raw material
-    } else {
+      computedPrice = q * u;
+computedCost = computedPrice * 0.6; // or whatever your cost logic is
       computedCost = q * u;
       computedPrice = computedCost * 1.4;
     }
