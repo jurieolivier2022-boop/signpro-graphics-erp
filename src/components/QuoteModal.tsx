@@ -225,9 +225,9 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem }: Qu
         computedCost = tierPrice * q * 0.6;
         item.unitCost = tierPrice;
       } else {
-        computedPrice = q * u;
-        computedCost = q * u * 0.6;
-      }
+  computedPrice = u; // ✅ use entered rate directly
+  computedCost = u * 0.6;
+}
     } else if (item.type === 'Material' && isArea) {
       computedPrice = q * u; // use entered rate directly
 computedCost = computedPrice * 0.6; // optional (your cost logic);
