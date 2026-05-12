@@ -229,10 +229,8 @@ export default function QuoteModal({ isOpen, onClose, quote, prefilledItem }: Qu
         computedCost = q * u * 0.6;
       }
     } else if (item.type === 'Material' && isArea) {
-      computedPrice = q * u;
-computedCost = computedPrice * 0.6; // or whatever your cost logic is
-      computedCost = q * u;
-      computedPrice = computedCost * 1.4;
+      computedPrice = q * u; // use entered rate directly
+computedCost = computedPrice * 0.6; // optional (your cost logic);
     }
 
     item.totalPrice = computedPrice;
