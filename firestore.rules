@@ -209,6 +209,22 @@ service cloud.firestore {
           && data.createdAt is number;
     }
 
+    match /litho_products/{productId} {
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isEmailVerified() && isValidId(productId) && isValidLithoProduct(incoming());
+      allow update: if isEmailVerified() && isValidLithoProduct(incoming());
+      allow delete: if isAdmin();
+    }
+
+    function isValidLithoProduct(data) {
+      return data.keys().hasAll(['name', 'status', 'createdAt', 'pricingGrid'])
+          && data.name is string && data.name.size() <= 100
+          && data.status in ['Active', 'Archived']
+          && data.pricingGrid is list
+          && data.createdAt is number;
+    }
+
     match /packages/{packageId} {
       allow list: if isSignedIn();
       allow get: if isSignedIn();

@@ -77,7 +77,7 @@ export interface Product {
 
 export interface QuoteItem {
   id: string;
-  type: 'Product' | 'Material' | 'NCR' | 'Package';
+  type: 'Product' | 'Material' | 'NCR' | 'Package' | 'Litho';
   originId: string;
   productId?: string; // Keep for backward compatibility or refactor later
   materialId?: string;
@@ -189,6 +189,25 @@ export interface Package {
   createdAt: number;
 }
 
+export interface LithoPricingTier {
+  quantity: number;
+  cost: number;
+  sell: number;
+}
+
+export interface LithoProduct {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  size: string;
+  paperType: string;
+  finishing?: string;
+  pricingGrid: LithoPricingTier[];
+  status: 'Active' | 'Archived';
+  createdAt: number;
+}
+
 export interface PurchaseOrder {
   id: string;
   poNumber: string;
@@ -223,6 +242,7 @@ export interface Job {
   }[];
   items?: QuoteItem[];
   total?: number;
+  profit?: number;
   stage: JobStage;
   priority: JobPriority;
   dueDate: number;

@@ -249,9 +249,16 @@ function CalculatorModal({ settings, onClose, books, onAddToQuote }: { settings:
       if (!selectedBook?.pricingGrid) return null;
       const tiers = [...selectedBook.pricingGrid].sort((a, b) => a.quantity - b.quantity);
       const exactMatch = tiers.find(t => t.quantity === quantity);
-      if (exactMatch) return exactMatch;
-      const lowerTier = [...tiers].reverse().find(t => t.quantity <= quantity);
-      return lowerTier || tiers[0] || null;
+      const matchingTier = exactMatch || [...tiers].reverse().find(t => t.quantity <= quantity) || tiers[0];
+      
+      if (!matchingTier) return null;
+      
+      return {
+        cost: matchingTier.cost * quantity,
+        sell: matchingTier.sell * quantity,
+        unitSell: matchingTier.sell,
+        quantity: quantity
+      };
     } else {
       const result = calculateNCRPrice(
         settings,
@@ -266,6 +273,7 @@ function CalculatorModal({ settings, onClose, books, onAddToQuote }: { settings:
       return {
         cost: result.costPrice,
         sell: result.totalPrice,
+        unitSell: result.totalPrice / quantity,
         quantity: quantity
       };
     }
@@ -448,11 +456,11 @@ function CalculatorModal({ settings, onClose, books, onAddToQuote }: { settings:
 
                   <div className="grid grid-cols-2 gap-4 pt-8 border-t border-border/30">
                     <div>
-                       <span className="text-[8px] font-black text-text-light uppercase tracking-widest block mb-1">Unit Cost</span>
-                       <span className="text-sm font-black text-text-main tabular-nums italic">R{(pricing.sell / quantity).toFixed(2)}</span>
+                       <span className="text-[8px] font-black text-text-light uppercase tracking-widest block mb-1">Unit Selling Price</span>
+                       <span className="text-sm font-black text-text-main tabular-nums italic">R{pricing.unitSell.toFixed(2)}</span>
                     </div>
                     <div>
-                       <span className="text-[8px] font-black text-text-light uppercase tracking-widest block mb-1">Production Basis</span>
+                       <span className="text-[8px] font-black text-text-light uppercase tracking-widest block mb-1">Total Production Cost</span>
                        <span className="text-sm font-black text-text-main tabular-nums italic opacity-40">R{pricing.cost.toFixed(2)}</span>
                     </div>
                   </div>

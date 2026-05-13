@@ -216,6 +216,33 @@
       },
       "required": ["name", "packagePrice", "status", "createdAt"]
     },
+    "LithoProduct": {
+      "title": "Litho Product",
+      "description": "Litho printing product specifications and tiered pricing",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "size": { "type": "string" },
+        "paperType": { "type": "string" },
+        "finishing": { "type": "string" },
+        "pricingGrid": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "quantity": { "type": "number" },
+              "cost": { "type": "number" },
+              "sell": { "type": "number" }
+            }
+          }
+        },
+        "status": { "type": "string", "enum": ["Active", "Archived"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name", "status", "createdAt"]
+    },
     "Department": {
       "title": "Department",
       "description": "Resource department for grouping jobs",
@@ -255,6 +282,7 @@
     "settings": { "schema": "PricingSettings", "description": "Global settings" },
     "ncr_books": { "schema": "NCRBook", "description": "NCR Registry" },
     "packages": { "schema": "Package", "description": "Product bundles" },
+    "litho_products": { "schema": "LithoProduct", "description": "Litho Product Registry" },
     "departments": { "schema": "Department", "description": "Resource departments for grouping jobs" },
     "company_settings": { "schema": "CompanySettings", "description": "Business profile" },
     "purchase_orders": { "schema": "PurchaseOrder", "description": "Procurement orders" },

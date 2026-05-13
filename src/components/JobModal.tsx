@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Calculator, AlertCircle, Package as PackageIcon, Book, Layers, Box, Calendar, Clock, CheckCircle2, Image as ImageIcon, Share2, Send, MessageCircle, ExternalLink, Download, Printer, Mail, Upload, FileText } from 'lucide-react';
-import { Job, QuoteItem, Client, Product, PricingSettings, Material, Machine, NCRBook, Package, JobStage, JobPriority, Department, CompanySettings } from '../types';
+import { Job, QuoteItem, Client, Product, PricingSettings, Material, Machine, NCRBook, Package, JobStage, JobPriority, Department, CompanySettings, LithoProduct } from '../types';
 import { createDocument, updateDocument, useCollection, getNextSequence } from '../lib/firestoreService';
 import { calculateQuoteTotals, DEFAULT_PRICING_SETTINGS } from '../lib/pricingService';
 import { cn, sqMmToSqM } from '../lib/utils';
@@ -32,13 +32,6 @@ const stageStyles = {
   Screenprinting: "bg-orange-50 text-orange-600",
 };
 
-const generateJobNumber = () => {
-  const year = new Date().getFullYear();
-  // Using a combination of timestamp fragment and random for better uniqueness in a distributed environment
-  const suffix = Math.floor(Math.random() * 100000).toString();
-  return `Jobcard-${year}-${suffix}`;
-};
-
 export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
   const { data: clients } = useCollection<Client>('clients');
   const { data: products } = useCollection<Product>('products');
@@ -46,6 +39,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
   const { data: machines } = useCollection<Machine>('machines');
   const { data: ncrBooks } = useCollection<NCRBook>('ncr_books');
   const { data: packages } = useCollection<Package>('packages');
+  const { data: lithoProducts } = useCollection<LithoProduct>('litho_products');
   const { data: departments } = useCollection<Department>('departments');
   const { data: settingsList } = useCollection<PricingSettings>('settings');
   const { data: companySettingsList } = useCollection<CompanySettings>('company_settings');
@@ -55,11 +49,10 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
 
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const [formData, setFormData] = useState<Partial<Job>>({
-    jobNumber: generateJobNumber(),
+    jobNumber: 'Pending...',
     clientId: '',
     clientName: '',
     productName: '',
@@ -221,6 +214,12 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
           description = pkg.name;
           unitCost = pkg.packagePrice;
         }
+      } else if (type === 'Litho') {
+        const litho = lithoProducts.find(p => p.id === updates.originId);
+        if (litho) {
+          description = litho.name;
+          unitCost = litho.pricingGrid?.[0]?.sell || 0;
+        }
       }
       updates.description = description;
       updates.unitCost = unitCost;
@@ -242,17 +241,18 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
     const isArea = (item.type === 'Product' && product?.costingMethod === 'Area') || 
                    (item.type === 'Material' && (material?.unit === 'm²' || material?.unit === 'sqm'));
 
+    // Recalculate totals
     const q = item.quantity ?? 1;
-    const u = item.unitCost ?? 0;
     const w = item.width ?? 0;
     const l = item.length ?? 0;
+    
+    const u = item.unitCost ?? 0;
 
     let computedPrice = 0;
     let computedCost = 0;
 
     if (item.type === 'Product') {
       const machine = machines.find(m => m.id === product?.defaultMachineId);
-      
       const matCost = material?.costPrice || u;
       let machineCost = 0;
 
@@ -284,21 +284,44 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
         const tierPrice = matchingTier ? matchingTier.sell : (ncr.pricingGrid[0]?.sell || 0);
         computedPrice = tierPrice * q;
         computedCost = tierPrice * q * 0.6;
-        item.unitCost = tierPrice;
+        item.unitCost = tierPrice * 0.6;
       } else {
-        computedPrice = q * u;
-        computedCost = q * u * 0.6;
+        computedPrice = q * u * 1.4;
+        computedCost = q * u;
+      }
+    } else if (item.type === 'Package') {
+      const pkg = packages.find(p => p.id === item.originId);
+      const pkgPrice = pkg?.packagePrice || u * 1.4;
+      computedPrice = pkgPrice * q;
+      computedCost = computedPrice * 0.7;
+      item.unitCost = pkgPrice * 0.7;
+    } else if (item.type === 'Litho') {
+      const litho = lithoProducts.find(p => p.id === item.originId);
+      if (litho && litho.pricingGrid) {
+        const matchingTier = [...litho.pricingGrid].sort((a,b) => b.quantity - a.quantity).find(t => q >= t.quantity);
+        const tierPrice = matchingTier ? matchingTier.sell : (litho.pricingGrid[0]?.sell || 0);
+        computedPrice = tierPrice; 
+        computedCost = tierPrice * 0.6; 
+        item.unitCost = tierPrice / q;
+      } else {
+        computedPrice = q * u * 1.4;
+        computedCost = q * u;
       }
     } else if (item.type === 'Material' && isArea) {
       computedCost = q * sqMmToSqM(w * l) * u;
-      computedPrice = computedCost * 1.4; // Default markup for raw materials
+      computedPrice = computedCost * 1.4;
     } else {
       computedCost = q * u;
       computedPrice = computedCost * 1.4;
     }
 
-    item.totalPrice = computedPrice;
-    item.totalCost = computedCost;
+    if ('totalPrice' in updates) {
+      item.totalPrice = updates.totalPrice!;
+      item.totalCost = item.totalPrice * 0.6;
+    } else {
+      item.totalPrice = computedPrice;
+      item.totalCost = computedCost;
+    }
     
     setItems(newItems);
 
@@ -431,53 +454,16 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
     }
   };
 
-  const handleCreateZohoInvoice = async () => {
-    if (!job?.id) {
-      return;
-    }
-
-    console.log('Button Click: Create Zoho Invoice', { jobId: job.id });
-    setIsCreatingInvoice(true);
-    try {
-      const response = await fetch(`/jobs/${job.id}/create-invoice`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      let payload: any = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-
-      if (!response.ok) {
-        const message = payload?.message || `Request failed with status ${response.status}.`;
-        throw new Error(message);
-      }
-
-      alert(`Zoho invoice created${payload?.invoice_number ? `: ${payload.invoice_number}` : '.'}`);
-    } catch (error) {
-      console.error('Error creating Zoho invoice:', error);
-      alert(error instanceof Error ? error.message : 'Failed to create Zoho invoice.');
-    } finally {
-      setIsCreatingInvoice(false);
-    }
-  };
-
   const handleSave = async () => {
     console.log('Button Click: Commit Job to Registry', { isEdit: !!job?.id });
     setIsSaving(true);
     try {
       const client = clients.find(c => c.id === formData.clientId);
-      const finalData = {
+      const finalData: Partial<Job> = {
         ...formData,
         clientName: client ? (client.companyName || client.name) : 'Unknown',
         items: (items || []) as QuoteItem[],
         total: Number(totals.total) || 0,
-        jobNumber: formData.jobNumber || generateJobNumber(),
         clientId: formData.clientId || '',
         stage: formData.stage || 'Prepress',
         priority: formData.priority || 'Normal',
@@ -489,6 +475,9 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
       if (job?.id) {
         await updateDocument('jobs', job.id, finalData);
       } else {
+        const year = new Date().getFullYear();
+        const sequence = await getNextSequence(`jobs_${year}`);
+        finalData.jobNumber = `Jobcard-${year}-${sequence || Math.floor(Math.random() * 1000)}`;
         await createDocument('jobs', finalData as any);
       }
       setShowSuccess(true);
@@ -884,6 +873,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                     <th className="px-6 py-4 text-[9px] font-black text-text-light uppercase tracking-[0.2em]">Substrate</th>
                     <th className="px-6 py-4 text-[9px] font-black text-text-light uppercase tracking-[0.2em] w-20">Qty</th>
                     <th className="px-6 py-4 text-[9px] font-black text-text-light uppercase tracking-[0.2em] w-36">Metric (mm)</th>
+                    <th className="px-6 py-4 text-[9px] font-black text-text-light uppercase tracking-[0.2em] w-28">Rate (R)</th>
                     <th className="px-6 py-4 text-[9px] font-black text-text-light uppercase tracking-[0.2em] w-28">Total (R)</th>
                     <th className="px-6 py-4 text-[9px] font-black text-text-light uppercase tracking-[0.2em] w-14"></th>
                   </tr>
@@ -894,6 +884,8 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                     const material = materials.find(m => m.id === (item.type === 'Material' ? item.originId : item.materialId));
                     const isArea = (item.type === 'Product' && product?.costingMethod === 'Area') || 
                                    (item.type === 'Material' && (material?.unit === 'm²' || material?.unit === 'sqm'));
+                    const itemQuantity = item.quantity || 1;
+                    const unitSellPrice = item.totalPrice ? (item.totalPrice / itemQuantity) : 0;
 
                     return (
                       <tr key={item.id} className="hover:bg-brand-accent/[0.01] transition-colors">
@@ -905,7 +897,8 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                           >
                             <option value="Product">Product</option>
                             <option value="Material">Material</option>
-                            <option value="NCR">NCR</option>
+                            <option value="NCR">NCR Book</option>
+                            <option value="Litho">Litho Print</option>
                             <option value="Package">Package</option>
                           </select>
                         </td>
@@ -920,6 +913,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                               {item.type === 'Product' && products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                               {item.type === 'Material' && materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                               {item.type === 'NCR' && ncrBooks.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                              {item.type === 'Litho' && lithoProducts.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                               {item.type === 'Package' && packages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                             <input 
@@ -979,9 +973,34 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-xs font-black text-text-main tabular-nums italic">
-                            {(item.totalPrice || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] text-text-light font-bold">R</span>
+                            <input 
+                              type="number" 
+                              step="0.01"
+                              value={unitSellPrice || ''}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                updateItem(idx, { totalPrice: val * itemQuantity });
+                              }}
+                              className="w-full bg-transparent border-none p-0 focus:ring-0 font-black text-xs text-brand-accent tabular-nums"
+                            />
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-bold text-text-light">R</span>
+                            <input 
+                              type="number"
+                              step="0.01"
+                              value={item.totalPrice || ''}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                updateItem(idx, { totalPrice: val });
+                              }}
+                              className="w-full bg-transparent border-none p-0 focus:ring-0 text-xs font-black text-text-main tabular-nums italic"
+                            />
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button onClick={() => removeItem(idx)} className="text-text-light hover:text-red-500 transition-colors opacity-30 hover:opacity-100">
@@ -1019,17 +1038,9 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
             {job && (
               <div className="flex items-center gap-2 mr-6 border-r border-border pr-6">
                 <button 
-                  onClick={handleCreateZohoInvoice}
-                  title="Create Zoho Invoice"
-                  disabled={isCreatingInvoice || isSaving || isProcessing}
-                  className="px-5 py-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-[10px] font-black uppercase tracking-[0.18em]"
-                >
-                  {isCreatingInvoice ? 'Creating...' : 'Create Zoho Invoice'}
-                </button>
-                <button 
                   onClick={handleDownloadPDF}
                   title="Download Job Card PDF"
-                  disabled={isProcessing || isCreatingInvoice}
+                  disabled={isProcessing}
                   className="p-3 bg-white border border-border rounded-xl text-text-light hover:text-brand hover:border-brand transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download size={18} className={cn(isProcessing && "animate-bounce")} />
@@ -1037,7 +1048,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                 <button 
                   onClick={handlePrintPDF}
                   title="Print Job Card"
-                  disabled={isProcessing || isCreatingInvoice}
+                  disabled={isProcessing}
                   className="p-3 bg-white border border-border rounded-xl text-text-light hover:text-brand hover:border-brand transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Printer size={18} className={cn(isProcessing && "animate-bounce")} />
@@ -1045,7 +1056,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                 <button 
                   onClick={handleEmailPDF}
                   title="Send via Email"
-                  disabled={isProcessing || isCreatingInvoice}
+                  disabled={isProcessing}
                   className="p-3 bg-white border border-border rounded-xl text-text-light hover:text-amber-500 hover:border-amber-500 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Mail size={18} className={cn(isProcessing && "animate-bounce")} />
@@ -1053,7 +1064,7 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                 <button 
                   onClick={handleArtworkWhatsAppShare}
                   title="Send Artwork for Approval (WhatsApp)"
-                  disabled={isProcessing || isCreatingInvoice}
+                  disabled={isProcessing}
                   className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ImageIcon size={18} className={cn(isProcessing && "animate-bounce")} />
@@ -1061,17 +1072,17 @@ export default function JobModal({ isOpen, onClose, job }: JobModalProps) {
                 <button 
                   onClick={handleWhatsAppShare}
                   title="Share via WhatsApp"
-                  disabled={isProcessing || isCreatingInvoice}
+                  disabled={isProcessing}
                   className="p-3 bg-white border border-border rounded-xl text-text-light hover:text-emerald-500 hover:border-emerald-500 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <MessageCircle size={18} className={cn(isProcessing && "animate-bounce")} />
                 </button>
               </div>
             )}
-            <button onClick={onClose} disabled={isSaving || isProcessing || isCreatingInvoice} className="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-text-muted hover:bg-surface border border-border/50 transition-all disabled:opacity-50">Abort Entry</button>
+            <button onClick={onClose} disabled={isSaving || isProcessing} className="px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-text-muted hover:bg-surface border border-border/50 transition-all disabled:opacity-50">Abort Entry</button>
             <button 
               onClick={handleSave} 
-              disabled={isSaving || isProcessing || isCreatingInvoice}
+              disabled={isSaving || isProcessing}
               className="px-10 py-4 bg-brand text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-100 hover:-translate-y-1 transition-all flex items-center gap-3 disabled:opacity-70 disabled:translate-y-0"
             >
               {isSaving ? (

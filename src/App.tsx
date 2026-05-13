@@ -11,6 +11,7 @@ import Materials from '@/src/pages/Materials';
 import Suppliers from '@/src/pages/Suppliers';
 import Products from '@/src/pages/Products';
 import NCRBooks from '@/src/pages/NCRBooks';
+import LithoProducts from '@/src/pages/LithoProducts';
 import Packages from '@/src/pages/Packages';
 import Quotes from '@/src/pages/Quotes';
 import Jobs from '@/src/pages/Jobs';
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/suppliers" element={<PageWrapper title="Suppliers" component={<Suppliers />} />} />
             <Route path="/products" element={<PageWrapper title="Products & Services" component={<Products />} />} />
             <Route path="/ncr-books" element={<PageWrapper title="NCR Books" component={<NCRBooks />} />} />
+            <Route path="/litho-products" element={<PageWrapper title="Litho Products" component={<LithoProducts />} />} />
             <Route path="/packages" element={<PageWrapper title="Packages" component={<Packages />} />} />
             <Route path="/quotes" element={<PageWrapper title="Quotes" component={<Quotes />} />} />
             <Route path="/jobs" element={<PageWrapper title="Jobs" component={<Jobs />} />} />

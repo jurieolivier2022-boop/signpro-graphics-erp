@@ -69,10 +69,10 @@ export default function Quotes() {
     
     setIsUpdating(quote.id);
     try {
-      const sequence = await getNextSequence('jobs');
+      const year = new Date().getFullYear();
+      const sequence = await getNextSequence(`jobs_${year}`);
       if (sequence === null) throw new Error("Failed to generate sequence");
       
-      const year = new Date().getFullYear();
       const jobNumber = `Jobcard-${year}-${sequence.toString()}`;
       
       const jobData: Omit<Job, 'id'> = {

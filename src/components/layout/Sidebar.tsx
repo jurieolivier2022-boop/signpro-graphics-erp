@@ -19,7 +19,8 @@ import {
   Settings,
   LogOut,
   ChevronLeft,
-  Layers
+  Layers,
+  Printer
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
@@ -29,7 +30,8 @@ const navItems = [
   { icon: Box, label: 'Materials', path: '/materials' },
   { icon: Truck, label: 'Suppliers', path: '/suppliers' },
   { icon: Tag, label: 'Products', path: '/products' },
-  { icon: BookOpen, label: 'Print Registry', path: '/ncr-books' },
+  { icon: BookOpen, label: 'NCR Registry', path: '/ncr-books' },
+  { icon: Printer, label: 'Litho Registry', path: '/litho-products' },
   { icon: Package, label: 'Packages', path: '/packages' },
   { icon: FileText, label: 'Quotes', path: '/quotes' },
   { icon: Briefcase, label: 'Jobs', path: '/jobs' },
