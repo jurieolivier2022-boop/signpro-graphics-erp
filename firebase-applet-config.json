@@ -1,4 +1,4 @@
-{
+const firebaseConfig = {
   apiKey: "AIzaSyDu5Z3UOm1bUgS45qMaZyYZHiQwmQq0V6U",
   authDomain: "xtreme-production-490518.firebaseapp.com",
   projectId: "xtreme-production-490518",
